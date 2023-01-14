@@ -7,15 +7,15 @@ import win32api
 import win32con
 import win32gui
 try:
-    from PySide6.QtCore import Qt, QTimer, QPointF, QSize
-    from PySide6.QtGui import QGuiApplication, QPainter, QPen, QPainterPath, \
-        QIcon, QCursor
-    from PySide6.QtWidgets import QWidget, QToolButton, QLabel, QHBoxLayout
-except ModuleNotFoundError:
     from PyQt6.QtCore import Qt, QTimer, QPointF, QSize
     from PyQt6.QtGui import QGuiApplication, QPainter, QPen, QPainterPath, \
         QIcon, QCursor
     from PyQt6.QtWidgets import QWidget, QToolButton, QLabel, QHBoxLayout
+except ModuleNotFoundError:
+    from PySide6.QtCore import Qt, QTimer, QPointF, QSize
+    from PySide6.QtGui import QGuiApplication, QPainter, QPen, QPainterPath, \
+        QIcon, QCursor
+    from PySide6.QtWidgets import QWidget, QToolButton, QLabel, QHBoxLayout
 from win32comext.shell import shellcon
 
 from window_effects import WindowsEffects

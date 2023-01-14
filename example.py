@@ -1,11 +1,11 @@
 import sys
 
 try:
-    from PySide6.QtGui import QIcon
-    from PySide6.QtWidgets import QApplication
-except ModuleNotFoundError:
     from PyQt6.QtGui import QIcon
     from PyQt6.QtWidgets import QApplication
+except ModuleNotFoundError:
+    from PySide6.QtGui import QIcon
+    from PySide6.QtWidgets import QApplication
 
 from custom_window import CustomWindow
 
