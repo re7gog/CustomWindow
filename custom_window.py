@@ -1,6 +1,7 @@
 import winreg
 from ctypes import Structure, c_int, POINTER, windll, byref, sizeof, cast
 from ctypes.wintypes import DWORD, HWND, UINT, RECT, LPARAM, MSG, LPRECT
+from enum import Enum
 from sys import getwindowsversion
 
 import win32api
@@ -24,30 +25,30 @@ from window_effects import WindowsEffects
 
 class APPBARDATA(Structure):
     _fields_ = [
-        ('cbSize',           DWORD),
-        ('hWnd',             HWND),
+        ('cbSize', DWORD),
+        ('hWnd', HWND),
         ('uCallbackMessage', UINT),
-        ('uEdge',            UINT),
-        ('rc',               RECT),
-        ('lParam',           LPARAM)
+        ('uEdge', UINT),
+        ('rc', RECT),
+        ('lParam', LPARAM)
     ]
 
 
 class PWINDOWPOS(Structure):
     _fields_ = [
-        ('hWnd',            HWND),
+        ('hWnd', HWND),
         ('hwndInsertAfter', HWND),
-        ('x',               c_int),
-        ('y',               c_int),
-        ('cx',              c_int),
-        ('cy',              c_int),
-        ('flags',           UINT)
+        ('x', c_int),
+        ('y', c_int),
+        ('cx', c_int),
+        ('cy', c_int),
+        ('flags', UINT)
     ]
 
 
 class NCCALCSIZE_PARAMS(Structure):
     _fields_ = [
-        ('rgrc',  RECT*3),
+        ('rgrc', RECT * 3),
         ('lppos', POINTER(PWINDOWPOS))
     ]
 
@@ -149,6 +150,14 @@ class Taskbar:
         return cls.NO_POSITION
 
 
+def is_system_dark_mode():
+    path = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+    name = r"AppsUseLightTheme"
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path) as registry_key:
+        value, regtype = winreg.QueryValueEx(registry_key, name)
+    return not bool(value)
+
+
 def invert_color(color):
     inverted_color = ''
     for i in range(0, 5, 2):
@@ -156,14 +165,6 @@ def invert_color(color):
         inverted_color += hex(round(channel / 6))[2:].upper().zfill(2)
     inverted_color += color[-2:]
     return inverted_color
-
-
-def is_system_dark_mode():
-    path = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
-    name = r"AppsUseLightTheme"
-    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path) as registry_key:
-        value, regtype = winreg.QueryValueEx(registry_key, name)
-    return not bool(value)
 
 
 class CustomBase(QWidget):
@@ -204,7 +205,7 @@ class CustomBase(QWidget):
             raise ValueError("Wrong argument 'theme': "
                              "can be 'auto', 'dark' or 'light'")
         if len(color) != 8:
-            raise ValueError("Wrong argument 'color': must be 8 len")
+            raise ValueError("Wrong argument 'color': must be 8 hex symbols")
         if self.dark_mode:
             self.acrylic_color = invert_color(color)
         else:
@@ -222,10 +223,10 @@ class CustomBase(QWidget):
             self.win_effects.add_shadow_effect(self.winId())
         self.setStyleSheet("CustomBase{ background:transparent; }")
 
-        self.__effect_timer = QTimer(self)
-        self.__effect_timer.setInterval(100)
-        self.__effect_timer.setSingleShot(True)
-        self.__effect_timer.timeout.connect(self.set_effect)
+        self._effect_timer = QTimer(self)
+        self._effect_timer.setInterval(100)
+        self._effect_timer.setSingleShot(True)
+        self._effect_timer.timeout.connect(self.set_effect)
 
     def set_effect(self, enable=True):
         if self.effect_enabled == enable:
@@ -242,11 +243,11 @@ class CustomBase(QWidget):
 
     def _temporary_disable_effect(self):
         self.set_effect(False)
-        self.__effect_timer.stop()
-        self.__effect_timer.start()
+        self._effect_timer.stop()
+        self._effect_timer.start()
 
     def moveEvent(self, event):
-        if self.is_win11 or not self.__effect_timer:
+        if self.is_win11 or not self._effect_timer:
             return super().moveEvent(event)
         self._temporary_disable_effect()
 
@@ -300,30 +301,54 @@ class CustomBase(QWidget):
         return False, 0
 
 
+class TitleBarButtonState(Enum):
+    NORMAL = 0
+    HOVER = 1
+    PRESSED = 2
+
+
 class TitleBarButton(QToolButton):
     def __init__(self, parent, dark_mode):
         super().__init__(parent)
         if dark_mode:
-            colors = "FFFFFF"
+            color = "F" * 6
             self._icon_color = Qt.GlobalColor.white
         else:
-            colors = "000000"
+            color = "0" * 6
             self._icon_color = Qt.GlobalColor.black
-        self.setFixedSize(46, 32)
-        style = """
-        TitleBarButton{
-            background-color: transparent;
-            border: none;
-            margin: 0px;
-        }
-        TitleBarButton:hover{
-            background-color: #20""" + colors + """;
-        }
-        TitleBarButton:pressed{
-            background-color: #40""" + colors + """;
-        }
+        self.colors = "transparent", "#20" + color, "#40" + color
+        self._style = """
+        border: none;
+        margin: 0px;
         """
-        self.setStyleSheet(style)
+        self._state = TitleBarButtonState.NORMAL
+        self.set_state(TitleBarButtonState.NORMAL)
+        self.setFixedSize(46, 32)
+
+    def get_state(self):
+        return self._state
+
+    def set_state(self, state):
+        self._state = state
+        self.setStyleSheet(
+            f"background-color: {self.colors[state.value]};\n{self._style}")
+
+    def enterEvent(self, e):
+        self.set_state(TitleBarButtonState.HOVER)
+        super().enterEvent(e)
+
+    def leaveEvent(self, e):
+        self.set_state(TitleBarButtonState.NORMAL)
+        super().leaveEvent(e)
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            self.set_state(TitleBarButtonState.PRESSED)
+        super().mousePressEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        self.set_state(TitleBarButtonState.HOVER)
+        super().mouseReleaseEvent(e)
 
 
 class MinimizeButton(TitleBarButton):
@@ -349,19 +374,21 @@ class MaximizeButton(TitleBarButton):
         painter.setPen(pen)
 
         r = self.devicePixelRatioF()
-        painter.scale(1/r, 1/r)
+        painter.scale(1 / r, 1 / r)
         if not self.is_max:
-            painter.drawRect(int(18*r), int(11*r), int(10*r), int(10*r))
+            painter.drawRect(
+                int(18 * r), int(11 * r), int(10 * r), int(10 * r))
         else:
-            painter.drawRect(int(18*r), int(13*r), int(8*r), int(8*r))
-            x0 = int(18*r)+int(2*r)
-            y0 = 13*r
-            dw = int(2*r)
+            r_18, r_8 = int(18 * r), int(8 * r)
+            painter.drawRect(r_18, int(13 * r), r_8, r_8)
+            x0 = r_18 + int(2 * r)
+            y0 = 13 * r
+            dw = int(2 * r)
             path = QPainterPath(QPointF(x0, y0))
-            path.lineTo(x0, y0-dw)
-            path.lineTo(x0+8*r, y0-dw)
-            path.lineTo(x0+8*r, y0-dw+8*r)
-            path.lineTo(x0+8*r-dw, y0-dw+8*r)
+            path.lineTo(x0, y0 - dw)
+            path.lineTo(x0 + 8 * r, y0 - dw)
+            path.lineTo(x0 + 8 * r, y0 - dw + 8 * r)
+            path.lineTo(x0 + 8 * r - dw, y0 - dw + 8 * r)
             painter.drawPath(path)
 
 
@@ -369,15 +396,8 @@ class CloseButton(TitleBarButton):
     def __init__(self, parent, dark_mode):
         super().__init__(parent, dark_mode)
         self._dark_mode = dark_mode
-        style = self.styleSheet()[:self.styleSheet().find('}') + 1]
-        style += """
-        TitleBarButton:hover{
-            background-color: #C42B1C;
-        }
-        TitleBarButton:pressed{
-            background-color: #C83C30;
-        }"""
-        self.setStyleSheet(style)
+        self.colors = "transparent", "#C42B1C", "#C83C30"
+        self.set_state(TitleBarButtonState.NORMAL)
         self._white_icon = QIcon(r"res\close_white.svg")
         if self._dark_mode:
             self.setIcon(self._white_icon)
@@ -387,14 +407,14 @@ class CloseButton(TitleBarButton):
         self.setIconSize(QSize(46, 32))
 
     def enterEvent(self, event):
-        if self._dark_mode:
-            return
-        self.setIcon(self._white_icon)
+        if not self._dark_mode:
+            self.setIcon(self._white_icon)
+        super().enterEvent(event)
 
     def leaveEvent(self, event):
-        if self._dark_mode:
-            return
-        self.setIcon(self._black_icon)
+        if not self._dark_mode:
+            self.setIcon(self._black_icon)
+        super().leaveEvent(event)
 
 
 class TitleBar(QWidget):
@@ -464,6 +484,7 @@ class CustomWindow(CustomBase):
             Window background color
         """
         self.title_bar = None
+        self.max_btn_hovered = False
         super().__init__(use_mica, theme, color)
         self.title_bar = TitleBar(self, self.dark_mode)
 
@@ -492,6 +513,11 @@ class CustomWindow(CustomBase):
             pos = QCursor.pos()
             x = pos.x() - self.x()
             y = pos.y() - self.y()
+            if self.is_win11 and self.title_bar.childAt(
+                    pos - self.geometry().topLeft()) is self.title_bar.max_btn:
+                self.max_btn_hovered = True
+                self.title_bar.max_btn.set_state(TitleBarButtonState.HOVER)
+                return True, win32con.HTMAXBUTTON
             lx = x < self.BORDER_WIDTH
             rx = x > self.width() - self.BORDER_WIDTH
             ty = y < self.BORDER_WIDTH
@@ -512,5 +538,16 @@ class CustomWindow(CustomBase):
                 return True, win32con.HTLEFT
             elif ty:
                 return True, win32con.HTTOP
+        elif self.is_win11 and self.max_btn_hovered:
+            if msg.message == win32con.WM_NCLBUTTONDOWN:
+                self.title_bar.max_btn.set_state(TitleBarButtonState.PRESSED)
+                return True, 0
+            elif msg.message in [win32con.WM_NCLBUTTONUP,
+                                 win32con.WM_NCRBUTTONUP]:
+                self.title_bar.max_btn.click()
+            elif msg.message in [0x2A2, win32con.WM_MOUSELEAVE] \
+                    and self.title_bar.max_btn.get_state() != 0:
+                self.max_btn_hovered = False
+                self.title_bar.max_btn.set_state(TitleBarButtonState.NORMAL)
 
         return super().nativeEvent(event_type, message)
