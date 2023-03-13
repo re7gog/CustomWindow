@@ -12,7 +12,7 @@ from custom_window import CustomWindow
 
 class ExampleWindow(CustomWindow):
     def __init__(self):
-        super().__init__()
+        super().__init__(use_mica='if available', theme='auto', color="F2F2F299")
         self.resize(640, 480)
         self.setWindowTitle("Very example")
         self.setWindowIcon(QIcon("example_icon.png"))

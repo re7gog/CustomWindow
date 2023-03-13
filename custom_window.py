@@ -6,6 +6,7 @@ from sys import getwindowsversion
 import win32api
 import win32con
 import win32gui
+
 try:
     from PyQt6.QtCore import Qt, QTimer, QPointF, QSize
     from PyQt6.QtGui import QGuiApplication, QPainter, QPen, QPainterPath, \
@@ -202,9 +203,7 @@ class CustomBase(QWidget):
         else:
             raise ValueError("Wrong argument 'theme': "
                              "can be 'auto', 'dark' or 'light'")
-        if self.use_mica:
-            raise ValueError("Wrong argument 'color': can't be used with mica")
-        elif len(color) != 8:
+        if len(color) != 8:
             raise ValueError("Wrong argument 'color': must be 8 len")
         if self.dark_mode:
             self.acrylic_color = invert_color(color)
